@@ -1,0 +1,10 @@
+*
+!/geo_saas
+!/developemnt.ini
+!/production.ini
+!/gunicorn.conf.py
+!/MANIFEST.in
+!/requirements.txt
+!/pyproject.toml
+!/poetry.lock
+!/.prospector.yaml

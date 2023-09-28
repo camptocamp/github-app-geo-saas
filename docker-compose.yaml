@@ -1,0 +1,16 @@
+version: '3'
+services:
+  app:
+    image: camptocamp/geo_saas
+    ports:
+      - '8094:8080'
+    volumes:
+      - ./tests/hosts.yaml:/etc/geo_saas/hosts.yaml
+  tests:
+    image: camptocamp/geo_saas-dev
+    volumes:
+      - .:/app
+    command:
+      - tail
+      - -f
+      - /dev/null
