@@ -1,6 +1,5 @@
 # GitHub application for SaaS integration
 
-
 ## Contributing
 
 Install the pre-commit hooks:
