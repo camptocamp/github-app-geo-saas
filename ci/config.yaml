@@ -2,6 +2,7 @@
 
 checks:
   prettier: false
+  codespell: false
 
 publish:
   pypi:
