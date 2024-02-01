@@ -32,7 +32,11 @@ repos:
     rev: v2.2.5
     hooks:
       - id: codespell
-        exclude: ^(.*/)?poetry\.lock$
+        exclude: |-
+          (?x)^(
+            (.*/)?poetry\.lock
+            |\.github/workflows/pull-request-automation\.yaml
+          )$
   - repo: https://github.com/shellcheck-py/shellcheck-py
     rev: v0.9.0.2
     hooks:
