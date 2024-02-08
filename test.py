@@ -24,25 +24,84 @@ def _main():
     app_auth = AppAuth(args.app_id, args.private_key)
     git_integration = GithubIntegration(auth=app_auth)
 
-    print(app_auth)
-    print(git_integration)
-    print(git_integration.get_app())
     print(git_integration.get_app().slug + "[bot]")
 
-    print("=== get repos ===")
-    for i in git_integration.get_installations():
-        # print(i)
-        print(i.app_id)
-        # print(i.id)
-        # print(i.target_id)
-        # print(i.target_type)
-        for repo in i.get_repos():
-            print(repo)
+    # print("=== get repos ===")
+    # for i in git_integration.get_installations():
+    #    # print(i)
+    #    print(i.app_id)
+    #    # print(i.id)
+    #    # print(i.target_id)
+    #    # print(i.target_type)
+    #    for repo in i.get_repos():
+    #        print(repo)
 
     token = git_integration.get_access_token(
-        git_integration.get_installation("sbrunner", "test-github-app").id
+        git_integration.get_installation("camptocamp", "helm-custom-pod").id
     ).token
-    print(token)
+    app = Github(login_or_token=token)
+    repo = app.get_repo("camptocamp/helm-custom-pod")
+
+    def help(obj):
+        attributes = [a for a in dir(obj) if not a.startswith("_")]
+        print(f"{type(obj).__module__}.{type(obj).__name__}: " + ", ".join(attributes))
+
+    (help(app_auth))
+    (help(git_integration))
+    (help(git_integration.get_app()))
+
+    # Get all tags
+    first = True
+    for tag in repo.get_tags():
+        if first:
+            (help(tag))
+            first = False
+        print(f'{tag.name}: {tag.commit.commit.author.date}')
+        # github.Commit.Commit: CHECK_AFTER_INIT_FLAG, author, comments_url, commit, committer, create_comment, create_status, etag, files, get__repr__, get_check_runs, get_check_suites, get_combined_status, get_comments, get_pulls, get_statuses, html_url, last_modified, parents, raw_data, raw_headers, setCheckAfterInitFlag, sha, stats, update, url
+        # github.GitCommit.GitCommit: CHECK_AFTER_INIT_FLAG, author, committer, etag, get__repr__, html_url, last_modified, message, parents, raw_data, raw_headers, setCheckAfterInitFlag, sha, tree, update, url
+
+    oldTag = "1.1.2"
+    tag = "1.1.3"
+    # get the commits between oldTag and tag
+    commits = repo.compare(oldTag, tag).commits
+
+    print(commits)
+    print("=" * 20)
+    (help(repo))
+    (help(commits[0]))
+    (help(commits[0].commit))
+    (help(commits[0].commit.author))
+    (help(commits[0].author))
+    (help(commits[0].files[0]))
+    # print((commits[0].commit.author))
+    # print((commits[0].commit.author.date))
+    # print((commits[0].commit.author.name))
+    for file in commits[0].files:
+        print(file.filename)
+    print((commits[0].sha))
+    print((commits[0].author.login))
+    for pr in commits[0].get_pulls():
+        (help(pr))
+        for f in pr.get_files():
+            print(f.filename)
+        for c in pr.get_commits():
+            print(c)
+        print(pr.number) # V
+        print(pr.title) # V
+        print(pr.user.login) # V
+
+    # Get the related release
+    for release in repo.get_releases():
+        if release.tag_name == tag:
+            (help(release))
+            print(release.created_at)
+            print(release.author)
+            print(release.title)
+            print('='*10)
+            print(release.body)
+
+
+    sys.exit(0)
 
     subprocess.run(
         ["git", "clone", f"https://x-access-token:{token}@github.com/sbrunner/test-github-app.git"],
