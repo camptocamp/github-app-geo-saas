@@ -46,6 +46,8 @@ def _main():
         attributes = [a for a in dir(obj) if not a.startswith("_")]
         print(f"{type(obj).__module__}.{type(obj).__name__}: " + ", ".join(attributes))
 
+
+    print(help(repo._requester))
     (help(app_auth))
     (help(git_integration))
     (help(git_integration.get_app()))
