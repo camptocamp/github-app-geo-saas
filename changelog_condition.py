@@ -1,5 +1,8 @@
 import argparse
 from typing import NamedTuple, Optional, Union
+import subprocess
+import tempfile
+import os
 import yaml
 import github
 from github import Github, GithubIntegration
@@ -66,7 +69,7 @@ def match_title(pr: ChangelogItem, condition: dict) -> bool:
 
 
 def match_files(pr: ChangelogItem, condition: dict) -> bool:
-    file_re = re.compile('|'.join(condition["regex"]))
+    file_re = re.compile("|".join(condition["regex"]))
     for f in pr.files:
         if file_re.match(f) is None:
             return False
@@ -104,9 +107,10 @@ class Tag:
     TAG_RE = re.compile(r"v?(\d+)\.(\d+)\.(\d+)")
     TAG2_RE = re.compile(r"release_?(\d+)")
 
-    def __init__(self, tag_str: Optional[str] = None, tag: Optional[github.Tag.Tag]=None):
+    def __init__(self, tag_str: Optional[str] = None, tag: Optional[github.Tag.Tag] = None):
         if tag_str is None:
             tag_str = tag.name
+        self.tag_str = tag_str
         self.tag = tag
         tag_match = self.TAG_RE.match(tag_str)
         if tag_match is None:
@@ -125,22 +129,52 @@ class Tag:
     def __hash__(self) -> int:
         return hash((self.major, self.minor, self.patch))
 
-def _previus_tag(tag: Tag, tags: dict[Tag, Tag]) -> Optional[Tag]:
+    def __lt__(self, other: "Tag") -> bool:
+        if self.major < other.major:
+            return True
+        if self.major > other.major:
+            return False
+        if self.minor < other.minor:
+            return True
+        if self.minor > other.minor:
+            return False
+        return self.patch < other.patch
+
+    def __gt__(self, other: "Tag") -> bool:
+        if self.major > other.major:
+            return True
+        if self.major < other.major:
+            return False
+        if self.minor > other.minor:
+            return True
+        if self.minor < other.minor:
+            return False
+        return self.patch > other.patch
+
+    def __cmp__(self, other: "Tag") -> int:
+        if self < other:
+            return -1
+        if self > other:
+            return 1
+        return 0
+
+
+def _previous_tag(tag: Tag, tags: dict[Tag, Tag]) -> Optional[Tag]:
     if tag.patch != 0:
         test_tag = Tag(".".join(str(e) for e in (tag.major, tag.minor, tag.patch - 1)))
         if test_tag in tags:
             return tags[test_tag]
-        return _previus_tag(test_tag, tags)
+        return _previous_tag(test_tag, tags)
     if tag.minor != 0:
         test_tag = Tag(".".join(str(e) for e in (tag.major, tag.minor - 1, 0)))
         if test_tag in tags:
             return tags[test_tag]
-        return _previus_tag(test_tag, tags)
+        return _previous_tag(test_tag, tags)
     if tag.major != 0:
         test_tag = Tag(".".join(str(e) for e in (tag.major - 1, 0, 0)))
         if test_tag in tags:
             return tags[test_tag]
-        return _previus_tag(test_tag, tags)
+        return _previous_tag(test_tag, tags)
     return None
 
 
@@ -158,7 +192,7 @@ def get_labels(config: dict) -> set[str]:
 
 
 def get_sections(config: dict) -> list[str]:
-    sections = [config['default-group']]
+    sections = [config["default-group"]]
 
     for c in config["groups-conditions"]:
         group_name = c["group-name"]
@@ -256,6 +290,42 @@ groups-conditions:
 )
 
 
+def get_pull_request_tags(
+    repo: github.Repository.Repository, pull_request_number: int, tags: Optional[dict[Tag, Tag]] = None
+) -> Optional[Tag]:
+    """
+    Get the tags that contains the merge commit of the pull request
+    """
+    pr = repo.get_pull(pull_request_number)
+    # created temporary directory
+    with tempfile.TemporaryDirectory() as tmp_directory_name:
+        os.chdir(tmp_directory_name)
+        subprocess.run(["git", "clone", repo.clone_url], check=True)
+        os.chdir(os.path.join(tmp_directory_name, repo.name))
+        tags_str = (
+            subprocess.run(
+                ["git", "tag", "--contains", pr.merge_commit_sha], stdout=subprocess.PIPE, check=True
+            )
+            .stdout.decode()
+            .split("\n")
+        )
+        found_tags = []
+        for tag in tags_str:
+            if tag:
+                try:
+                    found_tags.append(Tag(tag))
+                except ValueError:
+                    pass
+
+    if not found_tags:
+        return None
+    found_tags.sort()
+    found_tag = found_tags[0]
+    if tags and found_tag in tags:
+        return tags[found_tag]
+    return found_tag
+
+
 def _main():
     parser = argparse.ArgumentParser(
         """
@@ -297,13 +367,12 @@ def _main():
         print(f"Tag {tag} not found")
         return
     tag = tags[tag]
-    old_tag = _previus_tag(tag, tags)
+    old_tag = _previous_tag(tag, tags)
     if old_tag is None:
         print("No previous tag")
         return
 
     changelog_items: set[ChangelogItem] = set()
-
 
     # get the commits between oldTag and tag
     for commit in repo.compare(old_tag.tag.name, tag.tag.name).commits:
@@ -344,8 +413,6 @@ def _main():
         group = get_group(item, CONFIG)
         groups.setdefault(group, []).append(item)
 
-    print(groups)
-
     print("Title:")
     created = tag.tag.commit.commit.author.date
     print(f"{tag.major}.{tag.minor}.{tag.patch} ({created:%Y-%m-%d})")
@@ -357,7 +424,7 @@ def _main():
         for item in groups[group]:
             authors = [item.author]
             authors.extend(a for a in item.authors if a != item.author)
-            authors = [f'@{a}' for a in authors]
+            authors = [f"@{a}" for a in authors]
             print(f"- {item.ref} **{item.title}** ({', '.join(authors)})")
         print()
 
